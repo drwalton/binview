@@ -133,20 +133,17 @@ int main(int argc, char **argv)
 	SDL_GL_MakeCurrent(win, context);
 	
 	glewExperimental = GL_TRUE;
-	GLenum r = glewInit();
-	if (r != GLEW_OK) {
-		return -2; //unable to init glew.
+	{
+    	GLenum r = glewInit();
+    	if (r != GLEW_OK) {
+    		return -2; //unable to init glew.
+    	}
 	}
-	glGetError();
-	
-	const GLubyte* buf;
-	buf = glGetString(GL_VERSION);
-	//printf("GL Version: %s\n", buf);
-
 	if (!glewIsSupported("GL_VERSION_4_1")) {
 		return -3; //opengl_4_1 not supported.
 	}
 	
+	//Make texture, and populate with initial chunk of file.
 	GLuint texture;
 	{
     	GLbyte *fileChunk = malloc(width*height);
@@ -168,6 +165,7 @@ int main(int argc, char **argv)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	}
 	
+	//Make vertex buffers.
 	GLuint vao, vertBuffer, texCoordBuffer;
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
@@ -184,6 +182,7 @@ int main(int argc, char **argv)
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 	
+	//Create shaders.
 	GLuint vertShader, fragShader, program;
 	vertShader = glCreateShader(GL_VERTEX_SHADER);
 	fragShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -210,11 +209,8 @@ int main(int argc, char **argv)
 	glProgramUniform1i(program, texSamplerUniform, 0);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glClearColor(1,1,1,1);
-	glClear(GL_COLOR_BUFFER_BIT);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	SDL_GL_SwapWindow(win);
-	glClear(GL_COLOR_BUFFER_BIT);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	
 	GLbyte *fileBuff = malloc(maxScrollLines*width);
@@ -229,15 +225,18 @@ int main(int argc, char **argv)
 			
 			if(event.type == SDL_MOUSEWHEEL) {
 				if(event.wheel.y < 0) {
-					//printf("Mouse wheel up\n");
+					//Scrolled up.
+					//TODO
 				} else if(event.wheel.y > 0) {
-					//printf("Mouse wheel down%d\n", event.wheel.y);
+					//Scrolled down.
 					int linesToLoad = min(event.wheel.y, maxScrollLines);
 					if(!feof(file)) {
 						fread(fileBuff, 1, width*linesToLoad, file);
                 		for(int r = 0; r < linesToLoad; ++r) {
                 			for(int c = 0; c < width; ++c) {
-                				byteToColor(fileBuff[(linesToLoad-r-1)*width + c], texBuff + (r*width + c)*3);
+                				byteToColor(
+									fileBuff[(linesToLoad-r-1)*width + c],
+									texBuff + (r*width + c)*3);
                 			}
                 		}
 						for(size_t i = 0; i < width*linesToLoad; ++i)
