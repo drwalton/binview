@@ -1,5 +1,8 @@
 #include <GL/glew.h>
 #include <SDL.h>
+#ifdef WIN32
+#undef main
+#endif
 #include <stdio.h>
 
 int width = 200, height = 400;
@@ -99,7 +102,7 @@ void byteToColor(GLbyte byte, GLbyte *color) {
 	else memcpy(color, RED, 3);
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
 	if(argc < 2) {
 		printf("Usage: binview [filename]\n");
