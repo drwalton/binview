@@ -5,7 +5,7 @@
 #endif
 #include <stdio.h>
 
-int width = 200, height = 400;
+int width = 200, height = 600;
 const int maxScrollLines = 20;
 const float verts[] = {
 	-1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, -1.f };
@@ -105,7 +105,7 @@ void byteToColor(GLbyte byte, GLbyte *color) {
 int main(int argc, char *argv[])
 {
 	if(argc < 2) {
-		printf("Usage: binview [filename]\n");
+		printf("Usage: binview [filename] <width> <height>\n");
 		return 1; //No filename supplied.
 	}
 	printf("Loading file: %s\n", argv[1]);
@@ -227,12 +227,12 @@ int main(int argc, char *argv[])
 			}
 			
 			if(event.type == SDL_MOUSEWHEEL) {
-				if(event.wheel.y < 0) {
+				if(event.wheel.y > 0) {
 					//Scrolled up.
 					//TODO
-				} else if(event.wheel.y > 0) {
+				} else if(event.wheel.y < 0) {
 					//Scrolled down.
-					int linesToLoad = min(event.wheel.y, maxScrollLines);
+					int linesToLoad = min(-event.wheel.y, maxScrollLines);
 					if(!feof(file)) {
 						fread(fileBuff, 1, width*linesToLoad, file);
                 		for(int r = 0; r < linesToLoad; ++r) {
