@@ -13,10 +13,10 @@ const float texCoords[] = {
 	0.f, 1.f, 0.f, 0.f, 1.f, 1.f, 1.f, 1.f, 0.f, 0.f, 1.f, 0.f };
 
 const GLchar *const vertShaderSource =
-"#version 410\n"
+"#version 130\n"
 "\n"
-"layout(location = 0) in vec2 vPos;\n"
-"layout(location = 1) in vec2 vTex;\n"
+"in vec2 vPos;\n"
+"in vec2 vTex;\n"
 "\n"
 "out vec2 tex;\n"
 "\n"
@@ -26,7 +26,7 @@ const GLchar *const vertShaderSource =
 "}\n"
 ;
 const GLchar *const fragShaderSource =
-"#version 410\n"
+"#version 130\n"
 "\n"
 "in vec2 tex;\n"
 "\n"
@@ -121,8 +121,8 @@ int main(int argc, char *argv[])
 	
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -142,8 +142,8 @@ int main(int argc, char *argv[])
     		return -2; //unable to init glew.
     	}
 	}
-	if (!glewIsSupported("GL_VERSION_4_1")) {
-		return -3; //opengl_4_1 not supported.
+	if (!glewIsSupported("GL_VERSION_3_0")) {
+		return -3; //opengl_3_0 not supported.
 	}
 	
 	//Make texture, and populate with initial chunk of file.
@@ -167,24 +167,7 @@ int main(int argc, char *argv[])
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	}
-	
-	//Make vertex buffers.
-	GLuint vao, vertBuffer, texCoordBuffer;
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-	glGenBuffers(1, &vertBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
-	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), verts, GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
-	glGenBuffers(1, &texCoordBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, texCoordBuffer);
-	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), texCoords, GL_STATIC_DRAW);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-	
+
 	//Create shaders.
 	GLuint vertShader, fragShader, program;
 	vertShader = glCreateShader(GL_VERTEX_SHADER);
@@ -201,6 +184,27 @@ int main(int argc, char *argv[])
 	if(!linkAndCheckProgram(program)) {
 		return -5; //Shaders failed to link.
 	}
+	
+	//Make vertex buffers.
+	GLint
+		vertAttrib = glGetAttribLocation(program, "vPos"),
+		texAttrib = glGetAttribLocation(program, "vTex");
+	GLuint vao, vertBuffer, texCoordBuffer;
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+	glGenBuffers(1, &vertBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), verts, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(vertAttrib);
+	glVertexAttribPointer(vertAttrib, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+	glGenBuffers(1, &texCoordBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, texCoordBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), texCoords, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(texAttrib);
+	glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+	
 	
 	SDL_Event event;
 	GLboolean running = GL_TRUE;
