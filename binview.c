@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 int width = 200, height = 600;
-const int maxScrollLines = 20;
+const int maxScrollLines = 20, scrollSpeed = 4;
 const float verts[] = {
 	-1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, -1.f };
 const float texCoords[] = {
@@ -56,7 +56,6 @@ GLboolean eventIsQuit(SDL_Event e)
 	}
 	return GL_FALSE;
 }
-
 int compileAndCheckShader(GLuint shader)
 {
 	glCompileShader(shader);
@@ -91,11 +90,38 @@ int linkAndCheckProgram(GLuint program)
 	}
 	return GL_TRUE;
 }
+GLuint createTexture(int width, int height, FILE *file)
+{
+	GLuint texture;
+
+	GLbyte *fileChunk = malloc(width*height);
+	GLbyte *texData = malloc(width*height*3);
+
+	memset(fileChunk, 0, width*height);
+	fread(fileChunk, 1, width*height, file);
+	for(int r = 0; r < height; ++r) {
+		for(int c = 0; c < width; ++c) {
+			byteToColor(fileChunk[(height-r-1)*width + c], texData + (r*width + c)*3);
+		}
+	}
+	for(int i = 0; i < width*height; ++i)
+		byteToColor(fileChunk[i], texData + ((width*height-i)*3));
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8,
+		width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texData);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	free(fileChunk);
+	free(texData);
+
+	return texture;
+}
 
 const GLbyte BLACK[3] = {0, 0, 0};
 const GLbyte BLUE[3] = {0, 0, 255};
 const GLbyte RED[3] = {255, 0, 0};
-
 void byteToColor(GLbyte byte, GLbyte *color) {
 	if(byte == 0) memcpy(color, BLACK, 3);
 	else if(byte < 127) memcpy(color, BLUE, 3);
@@ -147,26 +173,7 @@ int main(int argc, char *argv[])
 	}
 	
 	//Make texture, and populate with initial chunk of file.
-	GLuint texture;
-	{
-    	GLbyte *fileChunk = malloc(width*height);
-		memset(fileChunk, 0, width*height);
-    	GLbyte *texData = malloc(width*height*3);
-		fread(fileChunk, 1, width*height, file);
-		for(int r = 0; r < height; ++r) {
-			for(int c = 0; c < width; ++c) {
-				byteToColor(fileChunk[(height-r-1)*width + c], texData + (r*width + c)*3);
-			}
-		}
-		for(int i = 0; i < width*height; ++i)
-			byteToColor(fileChunk[i], texData + ((width*height-i)*3));
-    	glGenTextures(1, &texture);
-    	glBindTexture(GL_TEXTURE_2D, texture);
-    	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8,
-    		width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texData);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	}
+	GLuint texture = createTexture(width, height, file);
 
 	//Create shaders.
 	GLuint vertShader, fragShader, program;
@@ -224,43 +231,52 @@ int main(int argc, char *argv[])
 	GLbyte *texBuff = malloc(maxScrollLines*width*3);
 	glReadBuffer(GL_FRONT);
 	
-	while(running) {
-		while(SDL_PollEvent(&event)) {
-			if(eventIsQuit(event)) {
+	int scrollAmt;
+	while (running) {
+		SDL_Delay(30);
+		scrollAmt = 0;
+		while (SDL_PollEvent(&event)) {
+			if (eventIsQuit(event)) {
 				running = GL_FALSE;
 			}
-			
-			if(event.type == SDL_MOUSEWHEEL) {
-				if(event.wheel.y > 0) {
-					//Scrolled up.
-					//TODO
-				} else if(event.wheel.y < 0) {
-					//Scrolled down.
-					int linesToLoad = min(-event.wheel.y, maxScrollLines);
-					if(!feof(file)) {
-						fread(fileBuff, 1, width*linesToLoad, file);
-                		for(int r = 0; r < linesToLoad; ++r) {
-                			for(int c = 0; c < width; ++c) {
-                				byteToColor(
-									fileBuff[(linesToLoad-r-1)*width + c],
-									texBuff + (r*width + c)*3);
-                			}
-                		}
-						for(size_t i = 0; i < width*linesToLoad; ++i)
-							byteToColor(fileBuff[i], texBuff + i*3);
-						glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, linesToLoad, 0, 0, width, height-linesToLoad);
-						glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, linesToLoad, GL_RGB, GL_UNSIGNED_BYTE, texBuff);
-                    	glDrawArrays(GL_TRIANGLES, 0, 6);
-                    	SDL_GL_SwapWindow(win);
-					} else {
-						static int playedAlert = 0;
-						if(!playedAlert) {
-							playedAlert = 1;
-    						printf("\aEnd of file.\n");
-						}
+
+
+			if (event.type == SDL_MOUSEWHEEL) {
+				scrollAmt += event.wheel.y;
+			}
+		}
+		scrollAmt *= scrollSpeed;
+
+		if (scrollAmt < 0) {
+			//Scrolled down.
+			int linesToLoad = min(-scrollAmt, maxScrollLines);
+			if (!feof(file)) {
+				fread(fileBuff, 1, width*linesToLoad, file);
+				for (int r = 0; r < linesToLoad; ++r) {
+					for (int c = 0; c < width; ++c) {
+						byteToColor(
+							fileBuff[(linesToLoad - r - 1)*width + c],
+							texBuff + (r*width + c) * 3);
 					}
 				}
+				for (size_t i = 0; i < width*linesToLoad; ++i)
+					byteToColor(fileBuff[i], texBuff + i * 3);
+				glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, linesToLoad, 0, 0, width, height - linesToLoad);
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, linesToLoad, GL_RGB, GL_UNSIGNED_BYTE, texBuff);
+				glDrawArrays(GL_TRIANGLES, 0, 6);
+				SDL_GL_SwapWindow(win);
 			}
+			else {
+				static int playedAlert = 0;
+				if (!playedAlert) {
+					playedAlert = 1;
+					printf("\aEnd of file.\n");
+				}
+			}
+		}
+		if (scrollAmt > 0) {
+			//Scrolled up.
+			//TODO
 		}
 	}
 	
