@@ -239,10 +239,15 @@ int main(int argc, char *argv[])
     					//Load data from file.
     					fread(fileBuff, 1, width*linesToLoad, file);
     					//Scroll back to previous position.
-    					fseek(file, width*(height-linesToLoad-1), SEEK_CUR);
+    					fseek(file, width*(height-linesToLoad), SEEK_CUR);
     					//Draw
-    					for(size_t i = 0; i < width*linesToLoad; ++i)
-    						byteToColor(fileBuff[i], texBuff + i*3);
+						for(size_t r = 0; r < linesToLoad; ++r) {
+							for(size_t c = 0; c < width; ++c) {
+								byteToColor(
+									fileBuff[(linesToLoad-r-1)*width + c],
+									texBuff + (r*width + c)*3);
+							}
+						}
     					glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, linesToLoad, width, height-linesToLoad);
     					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, height-linesToLoad, width, linesToLoad, GL_RGB, GL_UNSIGNED_BYTE, texBuff);
                     	glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -253,8 +258,13 @@ int main(int argc, char *argv[])
 					int linesToLoad = min(-event.wheel.y, maxScrollLines);
 					if(!feof(file)) {
 						fread(fileBuff, 1, width*linesToLoad, file);
-						for(size_t i = 0; i < width*linesToLoad; ++i)
-							byteToColor(fileBuff[i], texBuff + i*3);
+						for(size_t r = 0; r < linesToLoad; ++r) {
+							for(size_t c = 0; c < width; ++c) {
+								byteToColor(
+									fileBuff[(linesToLoad-r-1)*width + c],
+									texBuff + (r*width + c)*3);
+							}
+						}
 						glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, linesToLoad, 0, 0, width, height-linesToLoad);
 						glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, linesToLoad, GL_RGB, GL_UNSIGNED_BYTE, texBuff);
                     	glDrawArrays(GL_TRIANGLES, 0, 6);

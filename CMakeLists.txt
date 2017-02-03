@@ -16,3 +16,5 @@ target_link_libraries(binview
 	${GLEW_LIBRARIES}
 	${SDL2_LIBRARIES})
 
+add_executable(testBinview testBinview.c)
+
