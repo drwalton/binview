@@ -23,7 +23,11 @@ void byteToColor(GLbyte byte, GLbyte *color) {
 }
 
 const GLchar *const vertShaderSource =
+#ifdef __APPLE__
+"#version 410\n"
+#else
 "#version 130\n"
+#endif
 "\n"
 "in vec2 vPos;\n"
 "in vec2 vTex;\n"
@@ -36,7 +40,11 @@ const GLchar *const vertShaderSource =
 "}\n"
 ;
 const GLchar *const fragShaderSource =
+#ifdef __APPLE__
+"#version 410\n"
+#else
 "#version 130\n"
+#endif
 "\n"
 "in vec2 tex;\n"
 "\n"
@@ -148,13 +156,18 @@ int main(int argc, char *argv[])
 	
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	#ifdef __APPLE__
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	#else 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	#endif
 	
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	
-	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
+	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
 	
 	SDL_Window *win = SDL_CreateWindow("binview", 30, 30,
 		width, height, winFlags);
@@ -249,7 +262,7 @@ int main(int argc, char *argv[])
 			//Scrolled up.
 			long currPos = ftell(file);
 			if(currPos > height*width) { //Check if we have scrolled down already.
-				int linesToLoad = min(event.wheel.y, maxScrollLines);
+				int linesToLoad = min(scrollAmt, maxScrollLines);
 				linesToLoad = min((currPos - (height*width)) / width, linesToLoad);
 				if(linesToLoad <= 0) return 1; //Sanity check.
 				//Move back by number of lines + screen height
@@ -258,7 +271,7 @@ int main(int argc, char *argv[])
 				fread(fileBuff, 1, width*linesToLoad, file);
 				//Scroll back to previous position.
 				fseek(file, width*(height-linesToLoad), SEEK_CUR);
-				//Draw
+				//DrascrollAmtw
 				for(size_t r = 0; r < linesToLoad; ++r) {
 					for(size_t c = 0; c < width; ++c) {
 						byteToColor(
@@ -273,7 +286,7 @@ int main(int argc, char *argv[])
 			}
 		} else if(scrollAmt < 0) {
 			//Scrolled down.
-			int linesToLoad = min(-event.wheel.y, maxScrollLines);
+			int linesToLoad = min(-scrollAmt, maxScrollLines);
 			if(!feof(file)) {
 				fread(fileBuff, 1, width*linesToLoad, file);
 				for(size_t r = 0; r < linesToLoad; ++r) {
