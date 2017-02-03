@@ -6,17 +6,27 @@
 #include <stdio.h>
 
 int width = 200, height = 600;
-const int maxScrollLines = 20;
+const int maxScrollLines = 20, scrollSpeed = 4;
 const float verts[] = {
 	-1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, -1.f };
 const float texCoords[] = {
 	0.f, 1.f, 0.f, 0.f, 1.f, 1.f, 1.f, 1.f, 0.f, 0.f, 1.f, 0.f };
 
+
+const GLbyte BLACK[] = {0, 0, 0, 0};
+const GLbyte BLUE[] = {0, 0, 255, 0};
+const GLbyte RED[] = {255, 0, 0, 0};
+void byteToColor(GLbyte byte, GLbyte *color) {
+	if(byte == 0) memcpy(color, BLACK, 4);
+	else if(byte < 127) memcpy(color, BLUE, 4);
+	else memcpy(color, RED, 4);
+}
+
 const GLchar *const vertShaderSource =
-"#version 410\n"
+"#version 130\n"
 "\n"
-"layout(location = 0) in vec2 vPos;\n"
-"layout(location = 1) in vec2 vTex;\n"
+"in vec2 vPos;\n"
+"in vec2 vTex;\n"
 "\n"
 "out vec2 tex;\n"
 "\n"
@@ -26,7 +36,7 @@ const GLchar *const vertShaderSource =
 "}\n"
 ;
 const GLchar *const fragShaderSource =
-"#version 410\n"
+"#version 130\n"
 "\n"
 "in vec2 tex;\n"
 "\n"
@@ -56,7 +66,6 @@ GLboolean eventIsQuit(SDL_Event e)
 	}
 	return GL_FALSE;
 }
-
 int compileAndCheckShader(GLuint shader)
 {
 	glCompileShader(shader);
@@ -91,15 +100,33 @@ int linkAndCheckProgram(GLuint program)
 	}
 	return GL_TRUE;
 }
+GLuint createTexture(int width, int height, FILE *file)
+{
+	GLuint texture;
 
-const GLbyte BLACK[3] = {0, 0, 0};
-const GLbyte BLUE[3] = {0, 0, 255};
-const GLbyte RED[3] = {255, 0, 0};
+	GLbyte *fileChunk = malloc(width*height);
+	GLbyte *texData = malloc(width*height*4);
 
-void byteToColor(GLbyte byte, GLbyte *color) {
-	if(byte == 0) memcpy(color, BLACK, 3);
-	else if(byte < 127) memcpy(color, BLUE, 3);
-	else memcpy(color, RED, 3);
+	memset(fileChunk, 0, width*height);
+	fread(fileChunk, 1, width*height, file);
+	for(int r = 0; r < height; ++r) {
+		for(int c = 0; c < width; ++c) {
+			byteToColor(fileChunk[(height-r-1)*width + c], texData + (r*width + c)*4);
+		}
+	}
+	for(int i = 0; i < width*height; ++i)
+		byteToColor(fileChunk[i], texData + ((width*height-i)*4));
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+		width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	free(fileChunk);
+	free(texData);
+
+	return texture;
 }
 
 int main(int argc, char *argv[])
@@ -121,8 +148,8 @@ int main(int argc, char *argv[])
 	
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -142,49 +169,13 @@ int main(int argc, char *argv[])
     		return -2; //unable to init glew.
     	}
 	}
-	if (!glewIsSupported("GL_VERSION_4_1")) {
-		return -3; //opengl_4_1 not supported.
+	if (!glewIsSupported("GL_VERSION_3_0")) {
+		return -3; //opengl_3_0 not supported.
 	}
 	
 	//Make texture, and populate with initial chunk of file.
-	GLuint texture;
-	{
-    	GLbyte *fileChunk = malloc(width*height);
-		memset(fileChunk, 0, width*height);
-    	GLbyte *texData = malloc(width*height*3);
-		fread(fileChunk, 1, width*height, file);
-		for(int r = 0; r < height; ++r) {
-			for(int c = 0; c < width; ++c) {
-				byteToColor(fileChunk[(height-r-1)*width + c], texData + (r*width + c)*3);
-			}
-		}
-		for(int i = 0; i < width*height; ++i)
-			byteToColor(fileChunk[i], texData + ((width*height-i)*3));
-    	glGenTextures(1, &texture);
-    	glBindTexture(GL_TEXTURE_2D, texture);
-    	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8,
-    		width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texData);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	}
-	
-	//Make vertex buffers.
-	GLuint vao, vertBuffer, texCoordBuffer;
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-	glGenBuffers(1, &vertBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
-	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), verts, GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
-	glGenBuffers(1, &texCoordBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, texCoordBuffer);
-	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), texCoords, GL_STATIC_DRAW);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-	
+	GLuint texture = createTexture(width, height, file);
+
 	//Create shaders.
 	GLuint vertShader, fragShader, program;
 	vertShader = glCreateShader(GL_VERTEX_SHADER);
@@ -202,6 +193,27 @@ int main(int argc, char *argv[])
 		return -5; //Shaders failed to link.
 	}
 	
+	//Make vertex buffers.
+	GLint
+		vertAttrib = glGetAttribLocation(program, "vPos"),
+		texAttrib = glGetAttribLocation(program, "vTex");
+	GLuint vao, vertBuffer, texCoordBuffer;
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+	glGenBuffers(1, &vertBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), verts, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(vertAttrib);
+	glVertexAttribPointer(vertAttrib, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+	glGenBuffers(1, &texCoordBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, texCoordBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 12*sizeof(float), texCoords, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(texAttrib);
+	glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+	
+	
 	SDL_Event event;
 	GLboolean running = GL_TRUE;
 	glDisable(GL_CULL_FACE);
@@ -217,65 +229,69 @@ int main(int argc, char *argv[])
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	
 	GLbyte *fileBuff = malloc(maxScrollLines*width);
-	GLbyte *texBuff = malloc(maxScrollLines*width*3);
+	GLbyte *texBuff = malloc(maxScrollLines*width*4);
 	glReadBuffer(GL_FRONT);
 	
-	while(running) {
-		while(SDL_PollEvent(&event)) {
-			if(eventIsQuit(event)) {
+	int scrollAmt;
+	while (running) {
+		SDL_Delay(30);
+		scrollAmt = 0;
+		while (SDL_PollEvent(&event)) {
+			if (eventIsQuit(event)) {
 				running = GL_FALSE;
 			}
-			
-			if(event.type == SDL_MOUSEWHEEL) {
-				if(event.wheel.y > 0) {
-					//Scrolled up.
-					long currPos = ftell(file);
-					if(currPos > height*width) { //Check if we have scrolled down already.
-    					int linesToLoad = min(event.wheel.y, maxScrollLines);
-						linesToLoad = min((currPos - (height*width)) / width, linesToLoad);
-						if(linesToLoad <= 0) return 1; //Sanity check.
-    					//Move back by number of lines + screen height
-    					fseek(file, -width*(linesToLoad + height), SEEK_CUR);
-    					//Load data from file.
-    					fread(fileBuff, 1, width*linesToLoad, file);
-    					//Scroll back to previous position.
-    					fseek(file, width*(height-linesToLoad), SEEK_CUR);
-    					//Draw
-						for(size_t r = 0; r < linesToLoad; ++r) {
-							for(size_t c = 0; c < width; ++c) {
-								byteToColor(
-									fileBuff[(linesToLoad-r-1)*width + c],
-									texBuff + (r*width + c)*3);
-							}
-						}
-    					glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, linesToLoad, width, height-linesToLoad);
-    					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, height-linesToLoad, width, linesToLoad, GL_RGB, GL_UNSIGNED_BYTE, texBuff);
-                    	glDrawArrays(GL_TRIANGLES, 0, 6);
-                    	SDL_GL_SwapWindow(win);
+			if (event.type == SDL_MOUSEWHEEL) {
+				scrollAmt += event.wheel.y;
+			}
+		}
+		scrollAmt *= scrollSpeed;
+		if(scrollAmt > 0) {
+			//Scrolled up.
+			long currPos = ftell(file);
+			if(currPos > height*width) { //Check if we have scrolled down already.
+				int linesToLoad = min(event.wheel.y, maxScrollLines);
+				linesToLoad = min((currPos - (height*width)) / width, linesToLoad);
+				if(linesToLoad <= 0) return 1; //Sanity check.
+				//Move back by number of lines + screen height
+				fseek(file, -width*(linesToLoad + height), SEEK_CUR);
+				//Load data from file.
+				fread(fileBuff, 1, width*linesToLoad, file);
+				//Scroll back to previous position.
+				fseek(file, width*(height-linesToLoad), SEEK_CUR);
+				//Draw
+				for(size_t r = 0; r < linesToLoad; ++r) {
+					for(size_t c = 0; c < width; ++c) {
+						byteToColor(
+							fileBuff[(linesToLoad-r-1)*width + c],
+							texBuff + (r*width + c)*4);
 					}
-				} else if(event.wheel.y < 0) {
-					//Scrolled down.
-					int linesToLoad = min(-event.wheel.y, maxScrollLines);
-					if(!feof(file)) {
-						fread(fileBuff, 1, width*linesToLoad, file);
-						for(size_t r = 0; r < linesToLoad; ++r) {
-							for(size_t c = 0; c < width; ++c) {
-								byteToColor(
-									fileBuff[(linesToLoad-r-1)*width + c],
-									texBuff + (r*width + c)*3);
-							}
-						}
-						glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, linesToLoad, 0, 0, width, height-linesToLoad);
-						glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, linesToLoad, GL_RGB, GL_UNSIGNED_BYTE, texBuff);
-                    	glDrawArrays(GL_TRIANGLES, 0, 6);
-                    	SDL_GL_SwapWindow(win);
-					} else {
-						static int playedAlert = 0;
-						if(!playedAlert) {
-							playedAlert = 1;
-    						printf("\aEnd of file.\n");
-						}
+				}
+				glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, linesToLoad, width, height-linesToLoad);
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, height-linesToLoad, width, linesToLoad, GL_RGBA, GL_UNSIGNED_BYTE, texBuff);
+            	glDrawArrays(GL_TRIANGLES, 0, 6);
+            	SDL_GL_SwapWindow(win);
+			}
+		} else if(scrollAmt < 0) {
+			//Scrolled down.
+			int linesToLoad = min(-event.wheel.y, maxScrollLines);
+			if(!feof(file)) {
+				fread(fileBuff, 1, width*linesToLoad, file);
+				for(size_t r = 0; r < linesToLoad; ++r) {
+					for(size_t c = 0; c < width; ++c) {
+						byteToColor(
+							fileBuff[(linesToLoad-r-1)*width + c],
+							texBuff + (r*width + c)*4);
 					}
+				}
+				glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, linesToLoad, 0, 0, width, height-linesToLoad);
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, linesToLoad, GL_RGBA, GL_UNSIGNED_BYTE, texBuff);
+            	glDrawArrays(GL_TRIANGLES, 0, 6);
+            	SDL_GL_SwapWindow(win);
+			} else {
+				static int playedAlert = 0;
+				if(!playedAlert) {
+					playedAlert = 1;
+					printf("\aEnd of file.\n");
 				}
 			}
 		}
