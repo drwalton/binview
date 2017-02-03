@@ -229,19 +229,30 @@ int main(int argc, char *argv[])
 			if(event.type == SDL_MOUSEWHEEL) {
 				if(event.wheel.y > 0) {
 					//Scrolled up.
-					//TODO
+					long currPos = ftell(file);
+					if(currPos > height*width) { //Check if we have scrolled down already.
+    					int linesToLoad = min(event.wheel.y, maxScrollLines);
+						linesToLoad = min((currPos - (height*width)) / width, linesToLoad);
+						if(linesToLoad <= 0) return 1; //Sanity check.
+    					//Move back by number of lines + screen height
+    					fseek(file, -width*(linesToLoad + height), SEEK_CUR);
+    					//Load data from file.
+    					fread(fileBuff, 1, width*linesToLoad, file);
+    					//Scroll back to previous position.
+    					fseek(file, width*(height-linesToLoad-1), SEEK_CUR);
+    					//Draw
+    					for(size_t i = 0; i < width*linesToLoad; ++i)
+    						byteToColor(fileBuff[i], texBuff + i*3);
+    					glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, linesToLoad, width, height-linesToLoad);
+    					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, height-linesToLoad, width, linesToLoad, GL_RGB, GL_UNSIGNED_BYTE, texBuff);
+                    	glDrawArrays(GL_TRIANGLES, 0, 6);
+                    	SDL_GL_SwapWindow(win);
+					}
 				} else if(event.wheel.y < 0) {
 					//Scrolled down.
 					int linesToLoad = min(-event.wheel.y, maxScrollLines);
 					if(!feof(file)) {
 						fread(fileBuff, 1, width*linesToLoad, file);
-                		for(int r = 0; r < linesToLoad; ++r) {
-                			for(int c = 0; c < width; ++c) {
-                				byteToColor(
-									fileBuff[(linesToLoad-r-1)*width + c],
-									texBuff + (r*width + c)*3);
-                			}
-                		}
 						for(size_t i = 0; i < width*linesToLoad; ++i)
 							byteToColor(fileBuff[i], texBuff + i*3);
 						glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, linesToLoad, 0, 0, width, height-linesToLoad);
