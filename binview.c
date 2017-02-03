@@ -5,6 +5,10 @@
 #endif
 #include <stdio.h>
 
+#ifdef __APPLE__
+#define USE_OGL_4_1
+#endif
+
 int width = 200, height = 600;
 const int maxScrollLines = 20, scrollSpeed = 4;
 const float verts[] = {
@@ -23,7 +27,7 @@ void byteToColor(GLbyte byte, GLbyte *color) {
 }
 
 const GLchar *const vertShaderSource =
-#ifdef __APPLE__
+#ifdef USE_OGL_4_1
 "#version 410\n"
 #else
 "#version 130\n"
@@ -40,7 +44,7 @@ const GLchar *const vertShaderSource =
 "}\n"
 ;
 const GLchar *const fragShaderSource =
-#ifdef __APPLE__
+#ifdef USE_OGL_4_1
 "#version 410\n"
 #else
 "#version 130\n"
@@ -137,6 +141,29 @@ GLuint createTexture(int width, int height, FILE *file)
 	return texture;
 }
 
+void fillTexture(GLuint texture, FILE *file)
+{
+	GLbyte *fileChunk = malloc(width*height);
+	memset(fileChunk, 0, width*height);
+	GLbyte *texData = malloc(width*height*4);
+	memset(texData, 0, width*height*4);
+	fread(fileChunk, 1, width*height, file);
+	for(int r = 0; r < height; ++r) {
+		for(int c = 0; c < width; ++c) {
+			byteToColor(fileChunk[(height-r-1)*width + c], texData + (r*width + c)*4);
+		}
+	}
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+		width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData);
+	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	
+	free(fileChunk);
+	free(texData);
+}
+
 int main(int argc, char *argv[])
 {
 	if(argc < 2) {
@@ -156,7 +183,7 @@ int main(int argc, char *argv[])
 	
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	#ifdef __APPLE__
+	#ifdef USE_OGL_4_1
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 	#else 
@@ -256,6 +283,29 @@ int main(int argc, char *argv[])
 			if (event.type == SDL_MOUSEWHEEL) {
 				scrollAmt += event.wheel.y;
 			}
+			else if(event.type == SDL_WINDOWEVENT) {
+				if(event.window.event == SDL_WINDOWEVENT_RESIZED) {
+    				//Scroll back by size of window.
+    				int newWidth = event.window.data1;
+    				int newHeight = event.window.data2;
+					long pos = ftell(file);
+					pos -= width*height;
+					pos -= pos % newWidth; //Ensure pos is a multiple of a line width.
+    				fseek(file, pos, SEEK_SET);
+    				width = newWidth;
+    				height = newHeight;
+					//Regenerate texture.
+    				fillTexture(texture, file);
+					glViewport(0, 0, width, height);
+                	glDrawArrays(GL_TRIANGLES, 0, 6);
+                	SDL_GL_SwapWindow(win);
+                	glDrawArrays(GL_TRIANGLES, 0, 6);
+                	SDL_GL_SwapWindow(win);
+					free(fileBuff); free(texBuff);
+                	fileBuff = malloc(maxScrollLines*width);
+                	texBuff = malloc(maxScrollLines*width*4);
+				}
+			}
 		}
 		scrollAmt *= scrollSpeed;
 		if(scrollAmt > 0) {
@@ -277,6 +327,7 @@ int main(int argc, char *argv[])
 						byteToColor(
 							fileBuff[(linesToLoad-r-1)*width + c],
 							texBuff + (r*width + c)*4);
+
 					}
 				}
 				glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, linesToLoad, width, height-linesToLoad);
