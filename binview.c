@@ -10,10 +10,13 @@
 #endif
 
 //General
-int width = 200, height = 600;
-const int maxScrollLines = 20, scrollSpeed = 4;
+int width = 500, height = 800;
+const int maxScrollLines = 40, scrollSpeed = 8;
 GLbyte *fileBuff, *texBuff;
+GLbyte *fileChunk = NULL, *texChunk = NULL;
 FILE *file;
+char winTitle[30];
+long fileSize, fileSizeKb;
 
 //OpenGL
 GLuint vertBuffer, texCoordBuffer, vao;
@@ -31,12 +34,19 @@ SDL_Renderer *renderer;
 
 
 const GLbyte BLACK[] = {0, 0, 0, 0};
-const GLbyte BLUE[] = {0, 0, 255, 0};
-const GLbyte RED[] = {255, 0, 0, 0};
 void byteToColor(GLbyte byte, GLbyte *color) {
 	if(byte == 0) memcpy(color, BLACK, 4);
-	else if(byte < 127) memcpy(color, BLUE, 4);
-	else memcpy(color, RED, 4);
+	else if (byte < 127) {
+		color[0] = 0;
+		color[1] = 0;
+		color[2] = byte + 128;
+		color[3] = 0;
+	} else {
+		color[0] = byte;
+		color[1] = 0;
+		color[2] = 0;
+		color[3] = 0;
+	}
 }
 
 const GLchar *const vertShaderSource =
@@ -78,7 +88,6 @@ const GLchar *const fragShaderSource =
 int min(int a, int b) {
 	return a < b ? a : b;
 }
-
 void setupSDLAndGLEW()
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) < 0) {
@@ -120,7 +129,6 @@ void setupSDLAndGLEW()
 		exit(-3); //opengl_3_0 not supported.
 	}
 }
-
 GLboolean eventIsQuit(SDL_Event e)
 {
 	if (e.type == SDL_QUIT) {
@@ -167,7 +175,6 @@ int linkAndCheckProgram(GLuint program)
 	}
 	return GL_TRUE;
 }
-
 void setupVertexBuffers()
 {
 	GLint
@@ -188,7 +195,6 @@ void setupVertexBuffers()
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 }
-
 void makeShaderProgram()
 {
 	vertShader = glCreateShader(GL_VERTEX_SHADER);
@@ -208,30 +214,32 @@ void makeShaderProgram()
 		exit(-5); //Shaders failed to link.
 	}
 }
-
-void fillTexture()
+void fillTexture(GLboolean textureSizeChanged)
 {
-	GLbyte *fileChunk = malloc(width*height);
-	memset(fileChunk, 0, width*height);
-	GLbyte *texData = malloc(width*height*4);
-	memset(texData, 0, width*height*4);
+	if (textureSizeChanged) {
+		if(fileChunk) free(fileChunk);
+		if(texChunk) free(texChunk);
+		fileChunk = malloc(width*height);
+		texChunk = malloc(width*height * 4);
+	}
 	fread(fileChunk, 1, width*height, file);
 	for(int r = 0; r < height; ++r) {
 		for(int c = 0; c < width; ++c) {
-			byteToColor(fileChunk[(height-r-1)*width + c], texData + (r*width + c)*4);
+			byteToColor(fileChunk[(height-r-1)*width + c], texChunk + (r*width + c)*4);
 		}
 	}
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
-		width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData);
-	
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	
-	free(fileChunk);
-	free(texData);
-}
+	if (textureSizeChanged) {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+			width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texChunk);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	} else {
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+			width, height, GL_RGBA, GL_UNSIGNED_BYTE, texChunk);
 
+	}
+}
 void scrollDown(int scrollAmt)
 {
 	int linesToLoad = min(-scrollAmt, maxScrollLines);
@@ -259,7 +267,6 @@ void scrollDown(int scrollAmt)
 		}
 	}
 }
-
 void scrollUp(int scrollAmt)
 {
     //First, make sure position is multiple of width.
@@ -299,7 +306,6 @@ void scrollUp(int scrollAmt)
     	SDL_GL_SwapWindow(win);
 	}
 }
-
 void resizeWindow(int newWidth, int newHeight)
 {
 	long pos = ftell(file);
@@ -315,7 +321,7 @@ void resizeWindow(int newWidth, int newHeight)
 	width = newWidth;
 	height = newHeight;
 	//Regenerate texture.
-	fillTexture(file);
+	fillTexture(GL_TRUE);
 	glViewport(0, 0, width, height);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	SDL_GL_SwapWindow(win);
@@ -340,12 +346,22 @@ int main(int argc, char *argv[])
 		height = atoi(argv[3]);
 	}
 	file = fopen(argv[1], "rb");
+	if (!file) {
+		printf("Unable to open file.\n");
+		return -7;
+	}
+
+	//Get size of file.
+	fseek(file, 0, SEEK_END);
+	fileSize = ftell(file);
+	fileSizeKb = fileSize / 1000;
+	fseek(file, 0, SEEK_SET);
 	
 	setupSDLAndGLEW();
 	
 	//Make texture, and populate with initial chunk of file.
 	glGenTextures(1, &texture);
-	fillTexture();
+	fillTexture(GL_TRUE);
 
 	//Create shaders.
 	makeShaderProgram();
@@ -384,10 +400,34 @@ int main(int argc, char *argv[])
 			}
 			else if(event.type == SDL_WINDOWEVENT) {
 				if(event.window.event == SDL_WINDOWEVENT_RESIZED) {
-    				//Scroll back by size of window.
     				int newWidth = event.window.data1;
     				int newHeight = event.window.data2;
 					resizeWindow(newWidth, newHeight);
+				}
+			}
+			else if (event.type == SDL_KEYDOWN) {
+				if (event.key.keysym.sym == SDLK_PAGEDOWN) {
+					if (!feof(file)) {
+						fillTexture(GL_FALSE);
+						glDrawArrays(GL_TRIANGLES, 0, 6);
+						SDL_GL_SwapWindow(win);
+					}
+				}
+				else if (event.key.keysym.sym == SDLK_PAGEUP) {
+					long pos = ftell(file);
+					if (pos != 0) {
+						if (pos < width*height*2) {
+							pos = 0;
+						} else {
+							pos -= width*height*2;
+						}
+						fseek(file, pos, SEEK_SET);
+						fillTexture(GL_FALSE);
+						glDrawArrays(GL_TRIANGLES, 0, 6);
+						SDL_GL_SwapWindow(win);
+
+					}
+
 				}
 			}
 		}
@@ -399,6 +439,10 @@ int main(int argc, char *argv[])
 			//Scrolled down.
 			scrollDown(scrollAmt);
 		}
+		long p = ftell(file);
+		p /= 1000;
+		sprintf(winTitle, "binview: %ldKB of %ldKB", p, fileSizeKb);
+		SDL_SetWindowTitle(win, winTitle);
 	}
 	
 	//Let OS clean up.
