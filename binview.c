@@ -265,12 +265,12 @@ void scrollUp(int scrollAmt)
     //First, make sure position is multiple of width.
     //This might not be the case if we just reached the end of the file.
     long currPos = ftell(file);
-	if(currPos % width != 0) {
-        currPos -= currPos % width;
-        fseek(file, currPos, SEEK_SET);
-	}
 
     if(currPos > height*width) { //Check if we are able to scroll up.
+		if (currPos % width != 0) {
+			currPos -= currPos % width;
+			fseek(file, currPos, SEEK_SET);
+		}
     	int linesToLoad = min(scrollAmt, maxScrollLines);
     	linesToLoad = min((currPos - (height*width)) / width, linesToLoad);
     	if(linesToLoad <= 0) {
@@ -303,8 +303,14 @@ void scrollUp(int scrollAmt)
 void resizeWindow(int newWidth, int newHeight)
 {
 	long pos = ftell(file);
-	pos -= width*height;
-	pos -= pos % newWidth; //Ensure pos is a multiple of a line width.
+	//Back up to start of window.
+	if (pos > width*height) {
+		pos -= width*height;
+		if (pos >= pos % newWidth) pos -= pos % newWidth; //Ensure pos is a multiple of a line width.
+	} else {
+		pos = 0;
+	}
+	
 	fseek(file, pos, SEEK_SET);
 	width = newWidth;
 	height = newHeight;
