@@ -2,6 +2,10 @@
 #include <SDL.h>
 #ifdef WIN32
 #undef main
+#define _WIN32_LEAN_AND_MEAN	
+#include <Windows.h>
+#else
+#include <sys/stat.h>
 #endif
 #include <stdio.h>
 
@@ -11,7 +15,7 @@
 
 //General
 int width = 500, height = 800;
-const int maxScrollLines = 40, scrollSpeed = 8;
+const long maxScrollLines = 40, scrollSpeed = 8;
 GLbyte *fileBuff, *texBuff;
 GLbyte *fileChunk = NULL, *texChunk = NULL;
 FILE *file;
@@ -85,7 +89,7 @@ const GLchar *const fragShaderSource =
 "}\n"
 ;
 
-int min(int a, int b) {
+long lminl(long a, long b) {
 	return a < b ? a : b;
 }
 void setupSDLAndGLEW()
@@ -240,9 +244,9 @@ void fillTexture(GLboolean textureSizeChanged)
 
 	}
 }
-void scrollDown(int scrollAmt)
+void scrollDown(long scrollAmt)
 {
-	int linesToLoad = min(-scrollAmt, maxScrollLines);
+	long linesToLoad = lminl(-scrollAmt, maxScrollLines);
 	//Check we aren't at the end of the file.
 	if(!feof(file)) {
 		fread(fileBuff, 1, width*linesToLoad, file);
@@ -267,7 +271,7 @@ void scrollDown(int scrollAmt)
 		}
 	}
 }
-void scrollUp(int scrollAmt)
+void scrollUp(long scrollAmt)
 {
     //First, make sure position is multiple of width.
     //This might not be the case if we just reached the end of the file.
@@ -278,8 +282,8 @@ void scrollUp(int scrollAmt)
 			currPos -= currPos % width;
 			fseek(file, currPos, SEEK_SET);
 		}
-    	int linesToLoad = min(scrollAmt, maxScrollLines);
-    	linesToLoad = min((currPos - (height*width)) / width, linesToLoad);
+    	long linesToLoad = lminl(scrollAmt, maxScrollLines);
+    	linesToLoad = lminl((currPos - (height*width)) / width, linesToLoad);
     	if(linesToLoad <= 0) {
     		printf("ERROR: negative number of lines to load; "
 				"should not reach this point.\n");
@@ -334,28 +338,55 @@ void resizeWindow(int newWidth, int newHeight)
 	texBuff = malloc(maxScrollLines*width*4);
 }
 
+long getFileSize(const char *filename) {
+	long size;
+#ifdef _WIN32
+	LARGE_INTEGER fileSize;
+	HANDLE file = CreateFile(TEXT(filename), GENERIC_READ, 0, NULL,
+		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (file == INVALID_HANDLE_VALUE) {
+		printf("ERROR: unable to open file.\n");
+		exit(-1);
+	}
+	if (!GetFileSizeEx(file, &fileSize)) {
+		printf("ERROR: unable to obtain size of file.\n");
+		exit(-1);
+	}
+	CloseHandle(file);
+	size = fileSize.QuadPart;
+#else
+	struct stat st;
+
+	if (stat(filename, &st) != 0) {
+		printf("ERROR: unable to obtain size of file.\n");
+		exit(-1);
+	}
+	size = st.st_size;
+#endif
+	return size;
+}
+
 int main(int argc, char *argv[])
 {
 	if(argc < 2) {
 		printf("Usage: binview [filename] <width> <height>\n");
-		return 1; //No filename supplied.
+		return -1; //No filename supplied.
 	}
 	printf("Loading file: %s\n", argv[1]);
 	if(argc >= 4) {
 		width = atoi(argv[2]);
 		height = atoi(argv[3]);
 	}
+
+	//Get size of file.
+	fileSize = getFileSize(argv[1]);
+	fileSizeKb = fileSize / 1000;
+
 	file = fopen(argv[1], "rb");
 	if (!file) {
 		printf("Unable to open file.\n");
 		return -7;
 	}
-
-	//Get size of file.
-	fseek(file, 0, SEEK_END);
-	fileSize = ftell(file);
-	fileSizeKb = fileSize / 1000;
-	fseek(file, 0, SEEK_SET);
 	
 	setupSDLAndGLEW();
 	
@@ -387,7 +418,7 @@ int main(int argc, char *argv[])
 	texBuff = malloc(maxScrollLines*width*4);
 	glReadBuffer(GL_FRONT);
 	
-	int scrollAmt;
+	long scrollAmt;
 	while (running) {
 		SDL_Delay(30);
 		scrollAmt = 0;
