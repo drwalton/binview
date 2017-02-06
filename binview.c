@@ -5,6 +5,7 @@
 #endif
 #include <stdio.h>
 
+//Can use either OpenGL 4.1 or 3.0. Will use 4.1 if USE_OGL_4_1 is defined here.
 #ifdef __APPLE__
 #define USE_OGL_4_1
 #endif
@@ -23,6 +24,7 @@ const float verts[] = {
 	-1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, -1.f };
 const float texCoords[] = {
 	0.f, 1.f, 0.f, 0.f, 1.f, 1.f, 1.f, 1.f, 0.f, 0.f, 1.f, 0.f };
+const float ONE_OVER_255 = 1.f / 255.f;
 
 //SDL
 SDL_Window *win;
@@ -31,7 +33,7 @@ SDL_Renderer *renderer;
 
 void hueToRgb(GLbyte hue, GLbyte *rgb)
 {
-	float H = (float)(hue)/255.f;
+	float H = (float)(hue) * ONE_OVER_255;
 	float r = fabsf(H*6.f - 3.f) - 1.f;
 	float g = 2.f - fabsf(H*6.f - 2.f);
 	float b = 2.f - fabsf(H*6.f - 4.f);
@@ -124,7 +126,7 @@ void setupSDLAndGLEW()
 	#endif
 	
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 	
 	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
 	
@@ -146,6 +148,9 @@ void setupSDLAndGLEW()
 		printf("ERROR: OpenGL 3.0 is not supported");
 		exit(-3); //opengl_3_0 not supported.
 	}
+	
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
 }
 
 GLboolean eventIsQuit(SDL_Event e)
@@ -414,6 +419,7 @@ int main(int argc, char *argv[])
 				if(event.key.keysym.sym == SDLK_SPACE) {
 					//Go to next vis mode.
 					modeIndex = (modeIndex + 1) % nModes;
+					//Redraw screen.
 					fseek(file, -width*height, SEEK_CUR);
                 	fillTexture();
                 	glDrawArrays(GL_TRIANGLES, 0, 6);
