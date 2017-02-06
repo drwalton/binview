@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.6)
 
 project(binview LANGUAGES C)
-set(${CMAKE_MODULE_PATH} cmake_modules)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake_modules)
 
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)

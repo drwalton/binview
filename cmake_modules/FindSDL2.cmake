@@ -1,0 +1,24 @@
+# Sets the following variables:
+#
+#  SDL2_FOUND
+#  SDL2_INCLUDE_DIR
+#  SDL2_LIBRARY
+
+set(SDL2_SEARCH_PATHS
+	/usr/local
+	/usr
+	$ENV{SDL2_DIR}
+	)
+
+find_path(SDL2_INCLUDE_DIR
+	NAMES SDL.h
+	PATH_SUFFIXES include include/SDL2
+	PATHS ${SDL2_SEARCH_PATHS})
+
+find_library(SDL2_LIBRARY
+	NAMES SDL2
+	PATH_SUFFIXES lib lib/x64
+	PATHS ${SDL2_SEARCH_PATHS})
+
+set(SDL2_LIBRARIES ${SDL2_LIBRARY})
+set(SDL2_INCLUDE_DIRS ${SDL2_INCLUDE_DIR})
