@@ -29,14 +29,41 @@ SDL_Window *win;
 SDL_GLContext context;
 SDL_Renderer *renderer;
 
+void hueToRgb(GLbyte hue, GLbyte *rgb)
+{
+	float H = (float)(hue)/255.f;
+	float r = fabsf(H*6.f - 3.f) - 1.f;
+	float g = 2.f - fabsf(H*6.f - 2.f);
+	float b = 2.f - fabsf(H*6.f - 4.f);
+	rgb[0] = (GLbyte)(r * 255.f);
+	rgb[1] = (GLbyte)(g * 255.f);
+	rgb[2] = (GLbyte)(b * 255.f);
+}
+
+typedef enum Mode {GRAYSCALE, BLUE_AND_RED, RAINBOW} Mode;
+const int nModes = 3;
+int modeIndex = 1;
+Mode modes[] = {GRAYSCALE, BLUE_AND_RED, RAINBOW};
 
 const GLbyte BLACK[] = {0, 0, 0, 0};
 const GLbyte BLUE[] = {0, 0, 255, 0};
 const GLbyte RED[] = {255, 0, 0, 0};
 void byteToColor(GLbyte byte, GLbyte *color) {
-	if(byte == 0) memcpy(color, BLACK, 4);
-	else if(byte < 127) memcpy(color, BLUE, 4);
-	else memcpy(color, RED, 4);
+	if(modes[modeIndex] == BLUE_AND_RED) {
+    	if(byte == 0) memcpy(color, BLACK, 4);
+    	else if(byte < 127) memcpy(color, BLUE, 4);
+    	else memcpy(color, RED, 4);
+	} else if(modes[modeIndex == GRAYSCALE]) {
+		GLbyte tmp[] = {byte, byte, byte, 0};
+		memcpy(color, tmp, 4);
+	} else /* RAINBOW */ {
+		if(byte == 0) {
+			memset(color, 0, 4);
+		} else {
+    		hueToRgb(byte, color);
+    		color[3] = 0;
+		}
+	}
 }
 
 const GLchar *const vertShaderSource =
@@ -309,7 +336,7 @@ void resizeWindow(int newWidth, int newHeight)
 	width = newWidth;
 	height = newHeight;
 	//Regenerate texture.
-	fillTexture(file);
+	fillTexture();
 	glViewport(0, 0, width, height);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	SDL_GL_SwapWindow(win);
@@ -382,6 +409,17 @@ int main(int argc, char *argv[])
     				int newWidth = event.window.data1;
     				int newHeight = event.window.data2;
 					resizeWindow(newWidth, newHeight);
+				}
+			} else if(event.type == SDL_KEYDOWN) {
+				if(event.key.keysym.sym == SDLK_SPACE) {
+					//Go to next vis mode.
+					modeIndex = (modeIndex + 1) % nModes;
+					fseek(file, -width*height, SEEK_CUR);
+                	fillTexture();
+                	glDrawArrays(GL_TRIANGLES, 0, 6);
+                	SDL_GL_SwapWindow(win);
+                	glDrawArrays(GL_TRIANGLES, 0, 6);
+                	SDL_GL_SwapWindow(win);
 				}
 			}
 		}
