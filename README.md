@@ -1,4 +1,4 @@
-#binview
+# binview
 
 Simple binary file viewer, written in C and OpenGL
 
